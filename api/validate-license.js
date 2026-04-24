@@ -1,8 +1,10 @@
 // api/validate-license.js
-// POST /api/validate-license
-// Body: { license_key: "GB-XXXX-XXXX-XXXX" }
+import { Redis } from '@upstash/redis';
 
-import { kv } from '@vercel/kv';
+const kv = new Redis({
+    url: process.env.KV_REST_API_URL,
+    token: process.env.KV_REST_API_TOKEN,
+});
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,13 +18,12 @@ export default async function handler(req, res) {
     if (!license_key) return res.status(400).json({ ok: false, error: 'No license key' });
 
     const key = license_key.trim().toUpperCase();
-    const data = await kv.hgetall(`license:${key}`);
+    const data = await kv.get(`license:${key}`);
 
     if (!data) return res.status(200).json({ ok: false, error: 'not_found' });
     if (data.status !== 'active') return res.status(200).json({ ok: false, error: data.status });
 
-    // Обновить last_seen
-    await kv.hset(`license:${key}`, { last_seen: new Date().toISOString() });
+    await kv.set(`license:${key}`, { ...data, last_seen: new Date().toISOString() });
 
     return res.status(200).json({ ok: true });
 }
